@@ -81,9 +81,25 @@
         argv: [git, clone, "{{ ocl_url }}", "{{ ocl_dir }}"]
       when: not ocl_git.stat.exists
 
-    - name: Existing checkout
+    # Rerunning the one line must pick up playbook changes, so a clean checkout
+    # on main fast-forwards. Anything else (another branch, uncommitted work)
+    # is left exactly as is.
+    - name: Update {{ ocl_dir }} (fast-forward only, clean main only)
+      ansible.builtin.shell: |
+        cd "{{ ocl_dir }}" || exit 1
+        branch=$(git symbolic-ref --short -q HEAD)
+        if [ "$branch" != main ]; then echo "left as is: on branch ${branch:-detached}"; exit 0; fi
+        if [ -n "$(git status --porcelain)" ]; then echo "left as is: uncommitted changes"; exit 0; fi
+        before=$(git rev-parse HEAD)
+        git pull --ff-only -q || { echo "left as is: cannot fast-forward"; exit 0; }
+        [ "$before" = "$(git rev-parse HEAD)" ] && echo "up to date" || echo "updated"
+      register: ocl_update
+      changed_when: ocl_update.stdout == 'updated'
+      when: ocl_git.stat.exists
+
+    - name: Checkout status
       ansible.builtin.debug:
-        msg: "{{ ocl_dir }} is already a repo: left as is (not pulled or reset)."
+        msg: "{{ ocl_dir }}: {{ ocl_update.stdout | default('dry run, not pulled') }}"
       when: ocl_git.stat.exists
 
     - name: Stop here in a dry run without the checkout
