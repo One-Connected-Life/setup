@@ -1,0 +1,132 @@
+---
+# OCL Mac setup in one command (ansible-pull runs local.yml by default):
+#
+#   ansible-pull -U https://github.com/One-Connected-Life/setup.git
+#
+# 1. Stops with the exact `gh auth login` line when GitHub is not signed in;
+#    rerunning the same command then continues.
+# 2. Clones the private One-Connected-Life/ocl repo into ~/coding/ocl (full
+#    history) when it is missing. An existing checkout is never pulled, reset
+#    or checked out.
+# 3. Runs ~/coding/ocl/mac-setup/playbook.yml on your terminal (live output,
+#    prompts work) with the tags for your profile: GitHub login bluemihai (or
+#    -e setup_profile=mihai) gets everything; everyone else base,ocl,chrome.
+#    Tags you pass (-t ...) replace that default; --check is passed through.
+
+- name: OCL Mac setup
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tags: [always]
+  vars:
+    ocl_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/coding/ocl"
+    ocl_url: https://github.com/One-Connected-Life/ocl.git
+    login_cmd: gh auth login -s admin:public_key,workflow
+    team_tags: base,ocl,chrome
+    # -e vars that mac-setup/playbook.yml reads, passed on when given
+    pass_vars: [setup_profile, chrome_open, git_user_name, git_user_email,
+                brew_sudo_password, sync_groups, sync_bash]
+  environment:
+    # A second macOS account may not have brew on PATH yet.
+    PATH: "/opt/homebrew/bin:{{ lookup('ansible.builtin.env', 'PATH') }}"
+  tasks:
+    - name: Is gh installed?
+      ansible.builtin.command: gh --version
+      register: gh_version
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Stop when gh is missing
+      ansible.builtin.fail:
+        msg: "The GitHub CLI (gh) is missing. Run: brew install gh, then rerun."
+      when: gh_version.rc != 0
+
+    - name: Is GitHub signed in? (gh auth status)
+      ansible.builtin.command: gh auth status --hostname github.com
+      register: gh_status
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: Not signed in to GitHub
+      ansible.builtin.fail:
+        msg: "Not signed in to GitHub. Run this, then rerun the same ansible-pull: {{ login_cmd }}"
+      when: gh_status.rc != 0
+
+    - name: Let git use the gh login for github.com
+      ansible.builtin.command: gh auth setup-git --hostname github.com
+      changed_when: false
+
+    - name: Is {{ ocl_dir }} there?
+      ansible.builtin.find:
+        paths: "{{ ocl_dir }}"
+        hidden: true
+        file_type: any
+      register: ocl_files
+      failed_when: false
+
+    - name: Look for {{ ocl_dir }}/.git
+      ansible.builtin.stat:
+        path: "{{ ocl_dir }}/.git"
+      register: ocl_git
+
+    - name: Stop when {{ ocl_dir }} has files but is not a git repo
+      ansible.builtin.fail:
+        msg: "{{ ocl_dir }} exists, has files and is not a git repo. Move it aside, then rerun."
+      when: not ocl_git.stat.exists and (ocl_files.matched | default(0)) > 0
+
+    - name: Clone One-Connected-Life/ocl into {{ ocl_dir }}
+      ansible.builtin.command:
+        argv: [git, clone, "{{ ocl_url }}", "{{ ocl_dir }}"]
+      when: not ocl_git.stat.exists
+
+    - name: Existing checkout
+      ansible.builtin.debug:
+        msg: "{{ ocl_dir }} is already a repo: left as is (not pulled or reset)."
+      when: ocl_git.stat.exists
+
+    - name: Stop here in a dry run without the checkout
+      ansible.builtin.meta: end_play
+      when: not ocl_git.stat.exists and ansible_check_mode
+
+    - name: GitHub login (for the default tags)
+      ansible.builtin.command: gh api user -q .login
+      register: gh_login
+      changed_when: false
+      check_mode: false
+
+    - name: Choose the tags and options for mac-setup
+      ansible.builtin.set_fact:
+        mac_setup_argv: >-
+          {{ (['--tags', tags_given | join(',')] if tags_given
+              else [] if is_mihai else ['--tags', team_tags])
+             + (['--skip-tags', ansible_skip_tags | join(',')]
+                if ansible_skip_tags else [])
+             + (['--check'] if ansible_check_mode else [])
+             + (['-e', extra | to_json] if extra else []) }}
+      vars:
+        tags_given: "{{ ansible_run_tags | difference(['all', 'always']) }}"
+        is_mihai: >-
+          {{ setup_profile | default('mihai' if gh_login.stdout | trim == 'bluemihai'
+                                     else 'other') == 'mihai' }}
+        given: "{{ query('ansible.builtin.varnames', '^(' ~ pass_vars | join('|') ~ ')$') }}"
+        extra: "{{ dict(given | zip(query('ansible.builtin.vars', *given))) if given else {} }}"
+
+    - name: Run mac-setup/playbook.yml {{ mac_setup_argv | join(' ') }}
+      ansible.builtin.command:
+        argv: "{{ [playbook_dir ~ '/run-mac-setup.sh', ocl_dir] + mac_setup_argv }}"
+      register: mac_setup
+      changed_when: false
+      failed_when: false
+      check_mode: false
+
+    - name: mac-setup output (no terminal was found, so it ran here)
+      ansible.builtin.debug:
+        var: mac_setup.stdout_lines
+      when: mac_setup.stdout | length > 0
+
+    - name: Did mac-setup succeed?
+      ansible.builtin.fail:
+        msg: "mac-setup/playbook.yml failed (rc {{ mac_setup.rc }}); see its output above."
+      when: mac_setup.rc != 0

@@ -1,29 +1,31 @@
 # OCL: set up a new Mac (or a new macOS account)
 
-Open Terminal and paste each block, one at a time.
-
-**1. Homebrew** (skip if `brew --version` already works)
-```
-/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-eval "$(/opt/homebrew/bin/brew shellenv)"
-```
-
-**2. Ansible + GitHub CLI**
+Needs Homebrew ([brew.sh](https://brew.sh)), then Ansible and the GitHub CLI:
 ```
 brew install ansible gh
 ```
 
-**3. Sign in to GitHub** (your own login; Sam uses `oneconnectedlife`)
+Second macOS account (Homebrew belongs to another user): load brew first.
 ```
-gh auth login -s admin:public_key,workflow && gh auth setup-git
-```
-
-**4. Run the setup**
-```
-ansible-pull -U https://github.com/One-Connected-Life/ocl.git --full \
-  -d ~/coding/ocl mac-setup/playbook.yml --tags base,ocl,chrome
+eval "$(/opt/homebrew/bin/brew shellenv)"
 ```
 
-It prints `Running as: staff` or `Running as: collaborator`, then a checklist of the
-manual steps left. Full guide (needs the GitHub login):
+**Run the setup.** Rerun the same line after anything it asks you to do.
+```
+ansible-pull -U https://github.com/One-Connected-Life/setup.git
+```
+
+Not signed in to GitHub yet? It stops and prints this line (Sam signs in as
+`oneconnectedlife`); run it, then the setup line again:
+```
+gh auth login -s admin:public_key,workflow
+```
+
+It then clones the private `ocl` repo into `~/coding/ocl` (an existing checkout
+is left alone) and runs its `mac-setup/playbook.yml` with tags `base,ocl,chrome`
+(GitHub login `bluemihai`: everything). Add `-t <tags>` to choose, `--check`
+for a dry run. It prints `Running as: staff` or `Running as: collaborator`,
+then a checklist of the manual steps left.
+
+Full guide (needs the GitHub login):
 https://github.com/One-Connected-Life/ocl/blob/main/mac-setup/README.md
