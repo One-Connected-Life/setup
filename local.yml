@@ -5,7 +5,7 @@
 #
 # 1. Stops with the exact `gh auth login` line when GitHub is not signed in;
 #    rerunning the same command then continues.
-# 2. Clones the private playbook repo, bluemihai/mac-setup, into
+# 2. Clones the private playbook repo, One-Connected-Life/mac-setup, into
 #    ~/coding/mac-setup (-e mac_setup_dir=... for another place) when it is
 #    missing. An existing checkout fast-forwards when it is clean, on main and
 #    behind origin; otherwise one line says why and it runs as is. Never a
@@ -26,7 +26,7 @@
   tags: [always]
   vars:
     mac_setup_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/coding/mac-setup"
-    mac_setup_url: https://github.com/bluemihai/mac-setup.git
+    mac_setup_url: https://github.com/One-Connected-Life/mac-setup.git
     mac_setup_run: true
     login_cmd: gh auth login -s admin:public_key,workflow
     team_tags: base,ocl,chrome
@@ -83,7 +83,7 @@
         msg: "{{ mac_setup_dir }} exists, has files and is not a git repo. Move it aside, then rerun."
       when: not setup_git.stat.exists and (setup_files.matched | default(0)) > 0
 
-    - name: Clone bluemihai/mac-setup into {{ mac_setup_dir }}
+    - name: Clone One-Connected-Life/mac-setup into {{ mac_setup_dir }}
       ansible.builtin.command:
         argv: [git, clone, "{{ mac_setup_url }}", "{{ mac_setup_dir }}"]
       register: setup_clone
