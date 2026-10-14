@@ -116,7 +116,7 @@
 
     - name: Checkout status
       ansible.builtin.debug:
-        msg: "{{ mac_setup_dir }}: {{ setup_update.stdout | default('dry run, not pulled') }}"
+        msg: "{{ mac_setup_dir }}: {{ setup_update.stdout | default('dry run, not pulled', true) }}"
       when: setup_git.stat.exists
 
     - name: Stop here in a dry run without the checkout
