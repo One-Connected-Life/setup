@@ -22,7 +22,7 @@ gh auth login -s admin:public_key,workflow
 ```
 
 It then clones the private `ocl` repo into `~/coding/ocl` (an existing checkout
-is left alone) and runs its `mac-setup/playbook.yml` with tags `base,ocl,chrome`
+fast-forwards when it is clean, on `main` and behind; otherwise it runs as is) and runs its `mac-setup/playbook.yml` with tags `base,ocl,chrome`
 (GitHub login `bluemihai`: everything). Add `-t <tags>` to choose, `--check`
 for a dry run. It prints `Running as: staff` or `Running as: collaborator`,
 then a checklist of the manual steps left.

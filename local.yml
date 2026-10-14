@@ -6,8 +6,9 @@
 # 1. Stops with the exact `gh auth login` line when GitHub is not signed in;
 #    rerunning the same command then continues.
 # 2. Clones the private One-Connected-Life/ocl repo into ~/coding/ocl (full
-#    history) when it is missing. An existing checkout is never pulled, reset
-#    or checked out.
+#    history) when it is missing. An existing checkout fast-forwards when it
+#    is clean, on main and behind origin; otherwise one line says why and the
+#    checkout runs as is. Never a reset, stash or checkout.
 # 3. Runs ~/coding/ocl/mac-setup/playbook.yml on your terminal (live output,
 #    prompts work) with the tags for your profile: GitHub login bluemihai (or
 #    -e setup_profile=mihai) gets everything; everyone else base,ocl,chrome.
