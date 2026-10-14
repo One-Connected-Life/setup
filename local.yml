@@ -25,7 +25,7 @@
     team_tags: base,ocl,chrome
     # -e vars that mac-setup/playbook.yml reads, passed on when given
     pass_vars: [setup_profile, chrome_open, git_user_name, git_user_email,
-                brew_sudo_password, sync_groups, sync_bash]
+                brew_sudo_password, sync_groups, sync_bash, iterm_profiles]
   environment:
     # A second macOS account may not have brew on PATH yet.
     PATH: "/opt/homebrew/bin:{{ lookup('ansible.builtin.env', 'PATH') }}"
