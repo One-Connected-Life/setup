@@ -21,11 +21,13 @@ Not signed in to GitHub yet? It stops and prints this line (Sam signs in as
 gh auth login -s admin:public_key,workflow
 ```
 
-It then clones the private `ocl` repo into `~/coding/ocl` (an existing checkout
-fast-forwards when it is clean, on `main` and behind; otherwise it runs as is) and runs its `mac-setup/playbook.yml` with tags `base,ocl,chrome`
-(GitHub login `bluemihai`: everything). Add `-t <tags>` to choose, `--check`
-for a dry run. It prints `Running as: staff` or `Running as: collaborator`,
-then a checklist of the manual steps left.
+It then clones the private playbook repo (`bluemihai/mac-setup`) into
+`~/coding/mac-setup` (an existing checkout fast-forwards when it is clean, on
+`main` and behind; otherwise it runs as is) and runs its `playbook.yml` with
+tags `base,ocl,chrome` (GitHub login `bluemihai`: everything). Rerunning the
+line always gets the latest playbook. Add `-t <tags>` to choose, `--check` for
+a dry run, `-e mac_setup_run=false` to only fetch. It prints `Running as:
+staff` or `Running as: collaborator`, then a checklist of the manual steps left.
 
-Full guide (needs the GitHub login):
-https://github.com/One-Connected-Life/ocl/blob/main/mac-setup/README.md
+Full guide (needs a GitHub login with access to the private repo):
+https://github.com/bluemihai/mac-setup/blob/main/README.md

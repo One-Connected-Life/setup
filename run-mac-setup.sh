@@ -1,15 +1,15 @@
 #!/bin/bash
-# Called by local.yml: run OCL_DIR/mac-setup/playbook.yml with ARGS.
-# usage: run-mac-setup.sh OCL_DIR [ansible-playbook args...]
+# Called by local.yml: run MAC_SETUP_DIR/playbook.yml with ARGS.
+# usage: run-mac-setup.sh MAC_SETUP_DIR [ansible-playbook args...]
 #
 # Ansible gives a task no terminal, so the playbook's prompts (git name,
 # sudo password) could not be answered and its output would only show at the
 # end. So this finds the terminal ansible-pull was started from and runs the
 # playbook on it: live output, working prompts. With no terminal (cron, CI) it
 # runs plainly and local.yml prints the output afterwards.
-cd "$1/mac-setup" || exit 1
+cd "$1" || exit 1
 shift
-unset ANSIBLE_CONFIG   # use mac-setup/ansible.cfg
+unset ANSIBLE_CONFIG   # use the playbook repo's ansible.cfg
 
 # Only ever the terminal of the ansible-pull process itself: walk up to the
 # nearest ancestor whose command is ansible-pull (argv[0], or argv[1] after its

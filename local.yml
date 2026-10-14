@@ -5,14 +5,19 @@
 #
 # 1. Stops with the exact `gh auth login` line when GitHub is not signed in;
 #    rerunning the same command then continues.
-# 2. Clones the private One-Connected-Life/ocl repo into ~/coding/ocl (full
-#    history) when it is missing. An existing checkout fast-forwards when it
-#    is clean, on main and behind origin; otherwise one line says why and the
-#    checkout runs as is. Never a reset, stash or checkout.
-# 3. Runs ~/coding/ocl/mac-setup/playbook.yml on your terminal (live output,
-#    prompts work) with the tags for your profile: GitHub login bluemihai (or
+# 2. Clones the private playbook repo, bluemihai/mac-setup, into
+#    ~/coding/mac-setup (-e mac_setup_dir=... for another place) when it is
+#    missing. An existing checkout fast-forwards when it is clean, on main and
+#    behind origin; otherwise one line says why and it runs as is. Never a
+#    reset, stash or checkout. So every rerun runs the latest playbook.
+# 3. Runs its playbook.yml on your terminal (live output, prompts work) with
+#    the tags for your profile: GitHub login bluemihai (or
 #    -e setup_profile=mihai) gets everything; everyone else base,ocl,chrome.
 #    Tags you pass (-t ...) replace that default; --check is passed through.
+#    -e mac_setup_run=false stops after step 2 (fetch only).
+#
+# Nothing personal lives in this public repo: the playbook, its app lists and
+# its notes are all in the private one.
 
 - name: OCL Mac setup
   hosts: localhost
@@ -20,11 +25,12 @@
   gather_facts: false
   tags: [always]
   vars:
-    ocl_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/coding/ocl"
-    ocl_url: https://github.com/One-Connected-Life/ocl.git
+    mac_setup_dir: "{{ lookup('ansible.builtin.env', 'HOME') }}/coding/mac-setup"
+    mac_setup_url: https://github.com/bluemihai/mac-setup.git
+    mac_setup_run: true
     login_cmd: gh auth login -s admin:public_key,workflow
     team_tags: base,ocl,chrome
-    # -e vars that mac-setup/playbook.yml reads, passed on when given
+    # -e vars that the playbook reads, passed on when given
     pass_vars: [setup_profile, chrome_open, git_user_name, git_user_email,
                 brew_sudo_password, sync_groups, sync_bash, iterm_profiles]
   environment:
@@ -59,53 +65,67 @@
       ansible.builtin.command: gh auth setup-git --hostname github.com
       changed_when: false
 
-    - name: Is {{ ocl_dir }} there?
+    - name: Is {{ mac_setup_dir }} there?
       ansible.builtin.find:
-        paths: "{{ ocl_dir }}"
+        paths: "{{ mac_setup_dir }}"
         hidden: true
         file_type: any
-      register: ocl_files
+      register: setup_files
       failed_when: false
 
-    - name: Look for {{ ocl_dir }}/.git
+    - name: Look for {{ mac_setup_dir }}/.git
       ansible.builtin.stat:
-        path: "{{ ocl_dir }}/.git"
-      register: ocl_git
+        path: "{{ mac_setup_dir }}/.git"
+      register: setup_git
 
-    - name: Stop when {{ ocl_dir }} has files but is not a git repo
+    - name: Stop when {{ mac_setup_dir }} has files but is not a git repo
       ansible.builtin.fail:
-        msg: "{{ ocl_dir }} exists, has files and is not a git repo. Move it aside, then rerun."
-      when: not ocl_git.stat.exists and (ocl_files.matched | default(0)) > 0
+        msg: "{{ mac_setup_dir }} exists, has files and is not a git repo. Move it aside, then rerun."
+      when: not setup_git.stat.exists and (setup_files.matched | default(0)) > 0
 
-    - name: Clone One-Connected-Life/ocl into {{ ocl_dir }}
+    - name: Clone bluemihai/mac-setup into {{ mac_setup_dir }}
       ansible.builtin.command:
-        argv: [git, clone, "{{ ocl_url }}", "{{ ocl_dir }}"]
-      when: not ocl_git.stat.exists
+        argv: [git, clone, "{{ mac_setup_url }}", "{{ mac_setup_dir }}"]
+      register: setup_clone
+      failed_when: false
+      when: not setup_git.stat.exists
+
+    - name: Stop when the clone failed
+      ansible.builtin.fail:
+        msg: >-
+          Could not clone {{ mac_setup_url }} ({{ setup_clone.stderr | default('') | trim }}).
+          It is a private repo: the GitHub login {{ lookup('ansible.builtin.pipe', 'gh api user -q .login 2>/dev/null || true') }}
+          needs access to it (ask Mihai), then rerun the same ansible-pull.
+      when: setup_clone is not skipped and setup_clone.rc | default(0) != 0
 
     # Rerunning the one line must pick up playbook changes, so a clean checkout
     # on main fast-forwards. Anything else (another branch, uncommitted work)
     # is left exactly as is.
-    - name: Update {{ ocl_dir }} (fast-forward only, clean main only)
+    - name: Update {{ mac_setup_dir }} (fast-forward only, clean main only)
       ansible.builtin.shell: |
-        cd "{{ ocl_dir }}" || exit 1
+        cd "{{ mac_setup_dir }}" || exit 1
         branch=$(git symbolic-ref --short -q HEAD)
         if [ "$branch" != main ]; then echo "left as is: on branch ${branch:-detached}"; exit 0; fi
         if [ -n "$(git status --porcelain)" ]; then echo "left as is: uncommitted changes"; exit 0; fi
         before=$(git rev-parse HEAD)
         git pull --ff-only -q || { echo "left as is: cannot fast-forward"; exit 0; }
         [ "$before" = "$(git rev-parse HEAD)" ] && echo "up to date" || echo "updated"
-      register: ocl_update
-      changed_when: ocl_update.stdout == 'updated'
-      when: ocl_git.stat.exists
+      register: setup_update
+      changed_when: setup_update.stdout == 'updated'
+      when: setup_git.stat.exists
 
     - name: Checkout status
       ansible.builtin.debug:
-        msg: "{{ ocl_dir }}: {{ ocl_update.stdout | default('dry run, not pulled') }}"
-      when: ocl_git.stat.exists
+        msg: "{{ mac_setup_dir }}: {{ setup_update.stdout | default('dry run, not pulled') }}"
+      when: setup_git.stat.exists
 
     - name: Stop here in a dry run without the checkout
       ansible.builtin.meta: end_play
-      when: not ocl_git.stat.exists and ansible_check_mode
+      when: not setup_git.stat.exists and ansible_check_mode
+
+    - name: Stop here when asked to fetch only (-e mac_setup_run=false)
+      ansible.builtin.meta: end_play
+      when: not (mac_setup_run | bool)
 
     - name: GitHub login (for the default tags)
       ansible.builtin.command: gh api user -q .login
@@ -113,7 +133,7 @@
       changed_when: false
       check_mode: false
 
-    - name: Choose the tags and options for mac-setup
+    - name: Choose the tags and options for the playbook
       ansible.builtin.set_fact:
         mac_setup_argv: >-
           {{ (['--tags', tags_given | join(',')] if tags_given
@@ -130,9 +150,9 @@
         given: "{{ query('ansible.builtin.varnames', '^(' ~ pass_vars | join('|') ~ ')$') }}"
         extra: "{{ dict(given | zip(query('ansible.builtin.vars', *given))) if given else {} }}"
 
-    - name: Run mac-setup/playbook.yml {{ mac_setup_argv | join(' ') }}
+    - name: Run {{ mac_setup_dir }}/playbook.yml {{ mac_setup_argv | join(' ') }}
       ansible.builtin.command:
-        argv: "{{ [playbook_dir ~ '/run-mac-setup.sh', ocl_dir] + mac_setup_argv }}"
+        argv: "{{ [playbook_dir ~ '/run-mac-setup.sh', mac_setup_dir] + mac_setup_argv }}"
       register: mac_setup
       changed_when: false
       failed_when: false
@@ -145,5 +165,5 @@
 
     - name: Did mac-setup succeed?
       ansible.builtin.fail:
-        msg: "mac-setup/playbook.yml failed (rc {{ mac_setup.rc }}); see its output above."
+        msg: "{{ mac_setup_dir }}/playbook.yml failed (rc {{ mac_setup.rc }}); see its output above."
       when: mac_setup.rc != 0
